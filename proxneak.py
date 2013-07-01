@@ -24,10 +24,11 @@ import random
 import time
 import socket
 
+# TODO: Add verbose argument
 parser = argparse.ArgumentParser(description='Sneak data out through any ' +
     'connection that allows traffic to pass through, even if it\'s a '
     'regenerative proxy. Be aware that random latency can cause problems ' +
-    'at the receiving end.')
+    'reconstructing the data at the receiving end.')
 parser.add_argument('-s', nargs=1, metavar='<src>',
     help='Source IP address (not currently implemented')
 parser.add_argument('-d', nargs=1, metavar='<dst>',
@@ -41,8 +42,9 @@ parser.add_argument('-r', nargs=1, metavar='integer',
     help='Number of packets to send per second ' +
     '(default 1; recommended is 5 or less)')
 parser.add_argument('-u', action='store_true', help='Source is in Unicode')
+parser.add_argument('-V', action='version', version='0.1', help='Display version number')
 parser.add_argument('-z', action='store_true',
-    help='Compress content before sending')
+    help='Compress content before sending (not implemented)')
 
 args = parser.parse_args()
 
@@ -78,11 +80,13 @@ else:
 
 # Set default packet data
 # TODO: Make this look more realistic, especially for UDP
+# TODO: Come up with variable packet contents based on presumed protocol
+# TODO: When this gets big enough (past about four options), put in other file
 data = '6564693564656164'.decode('hex')
 
 
 # binstring takes a single character and converts it to an 8-character string
-# of zeroes and ones
+#   of zeroes and ones
 # TODO: Write Unicode version of this and sendchar
 def binstring(c):
     if (len(c) > 1) or (type(c) is not str):
@@ -94,7 +98,7 @@ def binstring(c):
 
 
 # sendchar takes a single character, uses binstring to convert it to "binary",
-# and then parses the binary string to determine whether to send a packet after
+# and then parses the "binary" string to determine whether to send a packet after
 # each timing gap
 def sendchar(c, delay):
     str1 = binstring(c)
@@ -123,7 +127,10 @@ def sendmessage(text, rate):
 
 
 # Check the protocol and send packets of the appropriate type
-# TODO: TCP, ICMP sections (need to study scapy.sr)
+# TODO: TCP, ICMP sections
+# TODO: TCP - check for SYN-ACK response, which would indicate a proxy in
+#       between, and send ACK to close the loop and ensure the initial SYN
+#       is sent
 # TODO: Make packets look like something real as these will stand out to an
 # experienced packeteer
 # PONDER: Better to have timer here or in sendchar?
@@ -147,6 +154,7 @@ def buildandsend(delay):
 
 
 # Get the data to send
+# TODO: Compress if required
 content = open(fin, mode='r')
 
 # Synchronize the connection by sending eight packets
