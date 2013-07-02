@@ -20,6 +20,7 @@
 # TODO: Add gzip functionality to reduce time to send overall file
 
 import argparse
+import base64
 import random
 import time
 import socket
@@ -42,7 +43,8 @@ parser.add_argument('-r', nargs=1, metavar='integer',
     help='Number of packets to send per second ' +
     '(default 1; recommended is 5 or less)')
 parser.add_argument('-u', action='store_true', help='Source is in Unicode')
-parser.add_argument('-V', action='version', version='0.1', help='Display version number')
+parser.add_argument('-V', action='version', version='0.1',
+    help='Display version number')
 parser.add_argument('-z', action='store_true',
     help='Compress content before sending (not implemented)')
 
@@ -85,6 +87,9 @@ else:
 data = '6564693564656164'.decode('hex')
 
 
+debug_count = 0
+
+
 # binstring takes a single character and converts it to an 8-character string
 #   of zeroes and ones
 # TODO: Write Unicode version of this and sendchar
@@ -101,17 +106,17 @@ def binstring(c):
 # and then parses the "binary" string to determine whether to send a packet after
 # each timing gap
 def sendchar(c, delay):
+    global debug_count
     str1 = binstring(c)
-    i = 0
     if str1 is None:
         return
     for l in str1:
         if l == '0':
-            i += 1
-            print "No packet to send"  # Remove after debugging complete
+            debug_count += 1
+            print str(debug_count) + " No packet to send"  # Remove after debugging complete
             time.sleep(delay)
         else:
-            i += 1
+            debug_count += 1
             buildandsend(delay)
 
 
@@ -135,7 +140,8 @@ def sendmessage(text, rate):
 # experienced packeteer
 # PONDER: Better to have timer here or in sendchar?
 def buildandsend(delay):
-    print "Sending packet"
+    global debug_count
+    print str(debug_count) + " Sending packet"
     if (proto == 'TCP'):
         send(IP(dst=dest, flags=2)/TCP(sport=random.randrange(1025,65535),
             dport=dstport))
@@ -153,14 +159,20 @@ def buildandsend(delay):
     return
 
 
-# Get the data to send
-# TODO: Compress if required
+# Retrieve the data to send and put it in base64 format.  This removes the
+# possibility of NULL and 0xFF characters (terminating string) being sent.
+# TODO: Compress before conversion if required
 content = open(fin, mode='r')
+message = base64.b64encode(content.read())
 
 # Synchronize the connection by sending eight packets
 print "Synchronizing..."
-sendmessage(chr(255) + chr(255), pps)
+sendmessage(chr(255), pps)
 
 # Send the message as one bit per transmission
 print "Sending data..."
-sendmessage(content.read(), pps)
+sendmessage(message, pps)
+
+# Close out the connection with ending sequence of 0x00FF
+print "Finishing up."
+sendmessage(chr(0) + chr(255), pps)
