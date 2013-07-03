@@ -26,69 +26,61 @@ from scapy.all import *
 parser = argparse.ArgumentParser(description='Receive data from any ' +
     'connection that allows traffic to pass through, even if it\'s a ' +
     'regenerative proxy. Be aware that random latency can cause problems ' +
-    'at the receiving end.')
+    'at the receiving end.  Requires root privileges.  Server portion ' +
+    'requires scapy.')
 parser.add_argument('-i', nargs=1, metavar='<interface>',
     help='Listener network interface (not currently implemented)')
 parser.add_argument('-l', nargs=1, metavar='<src>',
-    help='Listener IP address (not currently implemented)')
+    help='Listen for IP address (not currently implemented)')
 parser.add_argument('-p', nargs=1, metavar='port',
-    help='Listener port (default is 80)')
+    help='Listener port (default is 53)')
 parser.add_argument('--proto', nargs=1, metavar='',
-    help='Protocol to use (T=TCP (default), U=UDP, I=ICMP)')
+    help='Protocol to use (T=TCP, U=UDP (default), I=ICMP)')
 parser.add_argument('-f', nargs=1, metavar='filename',
-    help='Source file name')
-parser.add_argument('-z', action='store_true',
-    help='Compress content before sending')
+    help='Output file name (optional, but recommended)')
 
 args = parser.parse_args()
 
 
 # Set some default parameters if they're not already set by argument.
-# Defaults are port 80, 1 packet/sec, use TCP
-if args.l:
-    dest = args.l[0]
+# Defaults are port 80, 1 packet/sec, use UDP
 if not args.p:
-    dstport = 80
+    dstport = 53
 else:
     dstport = int(args.p[0])
 
-# TODO: Reference filename if supplied, but the code here is outdated
 if args.f:
-    fin = args.f[0]
+    f_out = args.f[0]
+else:
+    f_out = None
 
-'''
+# TODO: Add interface and destination address to filter in listener()
 if not args.i:
     i_face = "any"
 else:
     i_face = args.i
-'''
 
-zipstatus = args.z
-
+if args.l:
+    dest = args.l[0]
 
 if not args.proto:
     proto = 'TCP'
 else:
-    if args.proto[0] == 'T':
+    if args.proto[0] == 't':
         proto = 'TCP'
-    elif args.proto[0] == 'U':
+    elif args.proto[0] == 'u':
         proto = 'UDP'
-    elif args.proto[0] == 'I':
+    elif args.proto[0] == 'i':
         proto = 'ICMP'
     else:
-        proto = 'TCP'
+        proto = 'UDP'
 
 
 # Create a list to store useful information about the packets received
 # Contents will vary based on protocol involved, but will always include time
 packets = []
 gap = 0
-message = ""
-
-# TODO: Create interpreter
-def reset():
-    global packets
-    packets = []
+message = ''
 
 
 def listener():
@@ -134,6 +126,7 @@ def check_finish():
 
 def p_decode(m):
     global message
+    global f_out
     # Start with the 8th and 9th packets to determine bit spacing between them.
     # If it's greater than gap, divide and round to determine by how much and
     # add enough zeroes to buffer.
@@ -145,26 +138,30 @@ def p_decode(m):
         u = round(t / gap)
         tempStr = tempStr + ('0' * (int(u) - 1))
         tempStr = tempStr + '1'
-        print tempStr
+        # Remove next after debugging complete
+        # print tempStr
         # The following decoder was inspired by code from Lelouch Lamperouge
         # http://stackoverflow.com/questions/7732496/
         if len(tempStr) >= 8:
             x = int(tempStr[0:8], 2)
             message = message + chr(x)
-            print chr(x)
+            # Remove next after debugging complete
+            # print chr(x)
             if len(tempStr) == 8:
                 tempStr = ''
             else:
                 tempStr = tempStr[8:]
         a += 1
         b += 1
-    # Create a file called something like proxneak-1372837358
-    # At the moment, there's no way of guessing the proper extension
-    tempFileName = 'proxneak-' + str(int(time.mktime(time.gmtime())))
-    tempFile = open(tempFileName, 'wb')
+    # Create a file called something like proxneak-1372837358 if no filename
+    # has been provided.
+    # At the moment, I don't have a way to guess the proper extension
+    if not f_out:
+        f_out = 'proxneak-' + str(int(time.mktime(time.gmtime())))
+    tempFile = open(f_out, 'wb')
     tempFile.write(base64.b64decode(message))
     tempFile.close()
-    print "Message written out to " + tempFileName
+    print "Message written out to " + f_out
     exit()
 
 
