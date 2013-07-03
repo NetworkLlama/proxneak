@@ -34,7 +34,7 @@ parser.add_argument('-s', nargs=1, metavar='<src>',
 parser.add_argument('-d', nargs=1, metavar='<dst>',
     help='Destination IP address (required)')
 parser.add_argument('-p', nargs=1, metavar='port',
-    help='Destination port (default is 80)')
+    help='Destination port (default is 53)')
 parser.add_argument('--proto', nargs=1, metavar='',
     help='Protocol to use (t=TCP, u=UDP (default), i=ICMP) ICMP requires ' +
     'root access')
@@ -58,7 +58,7 @@ else:
     print "Destination address (-d) is required."
     exit()
 if not args.p:
-    dstport = 80
+    dstport = 53
 else:
     dstport = int(args.p[0])
 if args.f:
