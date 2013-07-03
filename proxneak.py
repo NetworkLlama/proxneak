@@ -37,7 +37,7 @@ parser.add_argument('-d', nargs=1, metavar='<dst>',
 parser.add_argument('-p', nargs=1, metavar='port',
     help='Destination port (default is 80)')
 parser.add_argument('--proto', nargs=1, metavar='',
-    help='Protocol to use (T=TCP (default), U=UDP, I=ICMP')
+    help='Protocol to use (T=TCP (default), U=UDP, I=ICMP)')
 parser.add_argument('-f', nargs=1, metavar='filename', help='Source file name')
 parser.add_argument('-r', nargs=1, metavar='integer',
     help='Number of packets to send per second ' +

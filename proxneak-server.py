@@ -17,8 +17,11 @@
 #
 
 import argparse
+import base64
 import time
+import struct
 from scapy.all import *
+
 
 parser = argparse.ArgumentParser(description='Receive data from any ' +
     'connection that allows traffic to pass through, even if it\'s a ' +
@@ -31,7 +34,7 @@ parser.add_argument('-l', nargs=1, metavar='<src>',
 parser.add_argument('-p', nargs=1, metavar='port',
     help='Listener port (default is 80)')
 parser.add_argument('--proto', nargs=1, metavar='',
-    help='Protocol to use (T=TCP (default), U=UDP, I=ICMP')
+    help='Protocol to use (T=TCP (default), U=UDP, I=ICMP)')
 parser.add_argument('-f', nargs=1, metavar='filename',
     help='Source file name')
 parser.add_argument('-u', action='store_true', help='Source is in Unicode')
@@ -55,7 +58,7 @@ if args.f:
 
 '''
 if not args.i:
-    i_face = "lo"
+    i_face = "any"
 else:
     i_face = args.i
 '''
@@ -81,7 +84,7 @@ else:
 # Contents will vary based on protocol involved, but will always include time
 packets = []
 gap = 0
-
+message = ""
 
 # TODO: Create interpreter
 def reset():
@@ -106,31 +109,64 @@ def packetstore(p):
         check_finish()
 
 
+# Use the initial 8 packets to determine average packet spacing.  Failure to
+# receive any of these will throw off the entire reception.
 def synchronize():
     global gap
     gap = (packets[7][0] - packets[0][0]) / 7
-    print gap
+    print "Average gap: " + str(gap) + " seconds"
 
 
+# Look at the last 8 packets received and see if they came in within
+# approximately the same spacing as the first sequence.  The closing sequence
+# is 0x00FF, represented by 8 no-packets and 8 packets.  This is a unique
+# sequence given that the message itself is base64-encoded.
 def check_finish():
     global packets
     global gap
-    print "Checking if finished..."
+    # print "Checking if finished..."
     q = len(packets) - 1
     gap_check = (packets[q][0] - packets[q - 7][0]) / 7
     if gap_check <= gap * 1.1:
+        # print "Decoding..."
         p_decode(packets)
         reset()
 
 
 def p_decode(m):
+    global message
+    # Start with the 8th and 9th packets to determine bit spacing between them.
+    # If it's greater than gap, divide and round to determine by how much and
+    # add enough zeroes to buffer.
     a = 7
     b = 8
-    t = m[b][0] - m[a][0]
-    if round(t / gaps) > 1:
-        print ""
-    a += 1
-    b += 1
+    tempStr = ''
+    while b < (len(m) - 7):
+        t = m[b][0] - m[a][0]
+        u = round(t / gap)
+        tempStr = tempStr + ('0' * (int(u) - 1))
+        tempStr = tempStr + '1'
+        print tempStr
+        # The following decoder was inspired by code from Lelouch Lamperouge
+        # http://stackoverflow.com/questions/7732496/
+        if len(tempStr) >= 8:
+            x = int(tempStr[0:8], 2)
+            message = message + chr(x)
+            print chr(x)
+            if len(tempStr) == 8:
+                tempStr = ''
+            else:
+                tempStr = tempStr[8:]
+        a += 1
+        b += 1
+    # Create a file called something like proxneak-1372837358
+    # At the moment, there's no way of guessing the proper extension
+    tempFileName = 'proxneak-' + str(int(time.mktime(time.gmtime())))
+    tempFile = open(tempFileName, 'wb')
+    tempFile.write(base64.b64decode(message))
+    tempFile.close()
+    print "Message written out to " + tempFileName
+    exit()
 
 
 def main():
