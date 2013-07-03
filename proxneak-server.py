@@ -28,16 +28,15 @@ parser = argparse.ArgumentParser(description='Receive data from any ' +
     'regenerative proxy. Be aware that random latency can cause problems ' +
     'at the receiving end.')
 parser.add_argument('-i', nargs=1, metavar='<interface>',
-    help='Listener network interface')
+    help='Listener network interface (not currently implemented)')
 parser.add_argument('-l', nargs=1, metavar='<src>',
-    help='Listener IP address (not currently implemented')
+    help='Listener IP address (not currently implemented)')
 parser.add_argument('-p', nargs=1, metavar='port',
     help='Listener port (default is 80)')
 parser.add_argument('--proto', nargs=1, metavar='',
     help='Protocol to use (T=TCP (default), U=UDP, I=ICMP)')
 parser.add_argument('-f', nargs=1, metavar='filename',
     help='Source file name')
-parser.add_argument('-u', action='store_true', help='Source is in Unicode')
 parser.add_argument('-z', action='store_true',
     help='Compress content before sending')
 
@@ -53,6 +52,7 @@ if not args.p:
 else:
     dstport = int(args.p[0])
 
+# TODO: Reference filename if supplied, but the code here is outdated
 if args.f:
     fin = args.f[0]
 
@@ -63,7 +63,6 @@ else:
     i_face = args.i
 '''
 
-unistatus = args.u
 zipstatus = args.z
 
 
