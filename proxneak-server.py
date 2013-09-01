@@ -16,31 +16,38 @@
 # Place, Suite 330, Boston, MA  02111-1307  USA
 #
 
+# TODO: Add gzip functionality to reduce time to send overall file
+
 import argparse
 import base64
+import pickle
+import pcapy
+import socket
+from struct import *
 import time
-import struct
-from scapy.all import *
-
 
 parser = argparse.ArgumentParser(description='Receive data from any ' +
     'connection that allows traffic to pass through, even if it\'s a ' +
     'regenerative proxy. Be aware that random latency can cause problems ' +
     'at the receiving end.  Requires root privileges.  Server portion ' +
-    'requires scapy.')
+    'requires pcapy.')
 parser.add_argument('-i', nargs=1, metavar='<interface>',
-    help='Listener network interface (not currently implemented)')
+    help='Listener network interface')
 parser.add_argument('-l', nargs=1, metavar='<src>',
     help='Listen for IP address (not currently implemented)')
-parser.add_argument('-p', nargs=1, metavar='port',
+parser.add_argument('-p', nargs=1, metavar='<port>',
     help='Listener port (default is 53)')
-parser.add_argument('--proto', nargs=1, metavar='',
+parser.add_argument('--proto', nargs=1, metavar='<protocol>',
     help='Protocol to use (T=TCP, U=UDP (default), I=ICMP)')
 parser.add_argument('-f', nargs=1, metavar='filename',
-    help='Output file name (optional, but recommended)')
+    help='Output file name (required)')
+parser.add_argument('-r', nargs=1, metavar='filename', help='Read a list ' +
+    'file in (requires --proto be specified)')
+parser.add_argument('-v', action='store_true', help='Verbose mode')
+parser.add_argument('-V', action='version', version='0.2',
+    help='Display version number')
 
 args = parser.parse_args()
-
 
 # Set some default parameters if they're not already set by argument.
 # Defaults are port 80, 1 packet/sec, use UDP
@@ -49,31 +56,42 @@ if not args.p:
 else:
     dstport = int(args.p[0])
 
-if args.f:
-    f_out = args.f[0]
+if not args.f:
+    print 'Requires an output file be specified with -f.  Exiting.'
+    exit
 else:
-    f_out = None
+    f_out = args.f[0]
 
 # TODO: Add interface and destination address to filter in listener()
 if not args.i:
-    i_face = "any"
+    print 'Requires an interface be specified with -i.  Exiting.'
+    exit
 else:
-    i_face = args.i
+    i_face = args.i[0]
 
 if args.l:
     dest = args.l[0]
 
 if not args.proto:
-    proto = 'TCP'
+    proto = '\\udp'
 else:
     if args.proto[0] == 't':
-        proto = 'TCP'
+        proto = '\\tcp'
     elif args.proto[0] == 'u':
-        proto = 'UDP'
+        proto = '\\udp'
     elif args.proto[0] == 'i':
-        proto = 'ICMP'
+        proto = '\\icmp'
     else:
-        proto = 'UDP'
+        proto = '\\udp'
+
+if args.r:
+    if not args.f:
+        print 'Requires a protocol be specified with --proto. Exiting.'
+        exit
+    else:
+        f_in = args.r[0]
+else:
+    f_in = None
 
 
 # Create a list to store useful information about the packets received
@@ -81,23 +99,107 @@ else:
 packets = []
 gap = 0
 message = ''
-
+filt = 'ip proto ' + proto + ' && port ' + str(dstport)
 
 def listener():
-    sniff(filter='not icmp and udp and dst port ' + str(dstport),
-        prn=packetstore)
+    # Setup listener using pcapy
+    # Listen on i_face, large snaplen, not promiscuous, no timeout
+    cap = pcapy.open_live(i_face, 65536, 1, 0)
+    cap.setfilter(filt)
+
+    # Start capturing packets to process
+    while (1):
+        (header, packet) = cap.next()
+        packetstore(packet)
 
 
 # Add packets to the packet store.  Working only for UDP right now.
-# TODO: Create store function for each packet type
 def packetstore(p):
     global packets
-    p_info = [time.time(), p.id, p[IP].src]
+    p_info = parse_packet(p)
+    if args.v:
+        print p_info[0]
     packets.append(p_info)
     if len(packets) == 8:
         synchronize()
-    if len(packets) >= 16:
+    if len(packets) >= 24:
         check_finish()
+
+
+# Much of the following code copied from Silver Moon
+# www.binarytides.com/code-a-packet-sniffer-in-python-with-pcapy-extension/
+def parse_packet(packet):
+    # Parse the Ethernet header, unpack, and extract the Ethernet proto number.
+    eth_len = 14
+
+    eth_header = packet[:eth_len]
+    eth = unpack('!6s6sH', eth_header)
+    eth_proto = socket.ntohs(eth[2])
+
+    # Parse IP packets (IP Proto number is 8)
+    if eth_proto == 8:
+        # Parse IP header
+        # Take first 20 characters for the IP header
+        ip_header = packet[eth_len:20 + eth_len]
+        iph = unpack('!BBHHHBBH4s4s', ip_header)
+
+        # Put them into a usable structure
+        version_ihl = iph[0]
+        version = version_ihl >> 4
+        ihl = version_ihl & 0xF
+
+        iph_len = ihl * 4
+
+        # Start extracting useful information
+        ttl = iph[5]
+        protocol = iph[6]
+        s_addr = socket.inet_ntoa(iph[8])
+        d_addr = socket.inet_ntoa(iph[9])
+
+        # TCP Protocol
+        if protocol == 6:
+            t = iph_len + eth_len
+            tcp_header = packet[t:t + 20]
+
+            tcph = unpack('!HHLLBBHHH', tcp_header)
+
+            s_port = tcph[0]
+            d_port = tcph[1]
+            sequence = tcph[2]
+
+            return [time.time(), s_addr, s_port, sequence]
+
+        # UDP Protocol
+        elif protocol == 17:
+            u = iph_len + eth_len
+            udph_len = 8
+            udp_header = packet[u:u + 8]
+
+            udph = unpack('!HHHH', udp_header)
+
+            s_port = udph[0]
+            d_port = udph[1]
+
+            info = [time.time(), s_addr, s_port]
+            return info
+
+        # ICMP Protocol
+        elif protocol == 1:
+            i = iph_len + eth_len
+            icmph_len = 4
+            icmp_header = packet[i:i+4]
+
+            icmph = unpack('!BBH', icmp_header)
+
+            icmp_type = icmph[0]
+            icmp_code = icmph[1]
+
+            return [time.time(), s_addr, icmp_type, icmp_code]
+
+        # If not TCP/UDP/ICMP
+        else:
+            print 'Protocol not TCP/UDP/ICMP. Exiting.'
+            exit
 
 
 # Use the initial 8 packets to determine average packet spacing.  Failure to
@@ -105,7 +207,8 @@ def packetstore(p):
 def synchronize():
     global gap
     gap = (packets[7][0] - packets[0][0]) / 7
-    print "Average gap: " + str(gap) + " seconds"
+    if args.v:
+        print "Average gap: " + str(gap) + " seconds"
 
 
 # Look at the last 8 packets received and see if they came in within
@@ -115,42 +218,49 @@ def synchronize():
 def check_finish():
     global packets
     global gap
-    # print "Checking if finished..."
     q = len(packets) - 1
-    gap_check = (packets[q][0] - packets[q - 7][0]) / 7
-    if gap_check <= gap * 1.1:
-        # print "Decoding..."
+    gap_check = (packets[q][0] - packets[q - 15][0]) / 15
+    # Allow a small fudge factor in the check for random latency
+    if gap_check <= gap * 1.03:
+        print "Decoding..."
         p_decode(packets)
         reset()
 
 
+# Turn the packet store into a usable message file
 def p_decode(m):
     global message
     global f_out
+
     # Start with the 8th and 9th packets to determine bit spacing between them.
     # If it's greater than gap, divide and round to determine by how much and
     # add enough zeroes to buffer.
     a = 7
     b = 8
     tempStr = ''
+    print 'Packets received: ' + str(len(m))
     while b < (len(m) - 7):
         t = m[b][0] - m[a][0]
         u = round(t / gap)
-        tempStr = tempStr + ('0' * (int(u) - 1))
-        tempStr = tempStr + '1'
-        # Remove next after debugging complete
-        # print tempStr
+        # Verbose code
+        if args.v:
+            print 'Current pair: %.6f and %.6f and Gap = %.2f' % \
+            (m[b][0], m[a][0], u)
+        tempStr = tempStr + ('0' * (int(u) - 1)) + '1'
         # The following decoder was inspired by code from Lelouch Lamperouge
         # http://stackoverflow.com/questions/7732496/
         if len(tempStr) >= 8:
             x = int(tempStr[0:8], 2)
             message = message + chr(x)
-            # Remove next after debugging complete
-            # print chr(x)
+            # Debug code to see what's actually coming in'
+            if args.v:
+                print 'Character: ' + str(x)
             if len(tempStr) == 8:
                 tempStr = ''
             else:
                 tempStr = tempStr[8:]
+                if tempStr[0] == 1:
+                    tempStr = '0' + tempStr
         a += 1
         b += 1
     # Create a file called something like proxneak-1372837358 if no filename
@@ -162,11 +272,33 @@ def p_decode(m):
     tempFile.write(base64.b64decode(message))
     tempFile.close()
     print "Message written out to " + f_out
+
+    # Save Base64 to compare input and output or partial recovery in case
+    # of corrupted transmission
+    tMessageFile = open(f_out + '-message', 'wb')
+    tMessageFile.write(message)
+    tMessageFile.close
+
+    # Debug code for possible later use
+    if args.v:
+        tDebugFile = open(f_out + '-debug', 'wb')
+        pickle.dump(m, tDebugFile)
+        tDebugFile.close
+
     exit()
 
 
 def main():
-    listener()
+    global packets
+    global f_in
+    if f_in:
+        f = open(f_in, 'r+')
+        packets = pickle.load(f)
+        f.close
+        synchronize()
+        p_decode(packets)
+    else:
+        listener()
 
 
 if __name__ == '__main__':
