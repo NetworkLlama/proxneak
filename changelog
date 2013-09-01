@@ -1,0 +1,26 @@
+Version 0.2
+===========
+Changed:
+  Moved from scapy to pcapy to address some timing issues and slightly ease requirements
+  Made -f (file output) switch mandatory on receiver
+
+Added:
+  -r switch to read debug files on receiver
+  -v switch to enable verbosity (debug code)
+  Initial multiple protocol support (not tested much)
+  Interface support for listener (now mandatory)
+
+Removed
+  -u unicode option (not implemented or necessary)
+  Some debug code
+
+
+Version 0.1 (Never posted publicly)
+===========
+Added Base64 encoding to handle binary input
+Added a lot of debug code, including debug file output for sender and receiver
+
+
+Version 0.0
+===========
+Initial upload
