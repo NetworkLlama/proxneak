@@ -21,9 +21,9 @@ resulting in a TCP connection from an OS different from the originating system
 (for example, FreeBSD instead of Windows).  But it still sends a packet, and
 that a packet is sent can still be a form of information.
 
-(Note that this might also be a way of sending information (albeit slowly)
-that the NSA can't reasonably track.  Saving all of the SYN packets that cross
-the Internet just isn't a practical way of doing business.
+(Note that this might also be a way of sending information, albeit slowly,
+that the NSA, et al., can't reasonably track.  Saving all of the SYN packets
+that cross the Internet just isn't a practical way of doing business.)
 
 Requirements
 ============
