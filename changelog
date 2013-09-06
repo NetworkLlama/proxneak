@@ -1,26 +1,52 @@
+===========
+Version 0.3
+===========
+Changed
+-------
+* Fixed some comments so they reflected the code
+* Made packet data (at least for UDP) random to limit IDS/IPS filtering
+* Improved debug code
+* Moved client main code into main() function
+* Synchronized switch labels
+* Flexibility on decoding to allow for greater trip time variance
+
+Added
+-----
+* Functional compression using bzip2
+* Initial TCP functionality
+
+
+===========
 Version 0.2
 ===========
-Changed:
-  Moved from scapy to pcapy to address some timing issues and slightly ease requirements
-  Made -f (file output) switch mandatory on receiver
+Changed
+-------
+* Moved from scapy to pcapy to address some timing issues and slightly ease requirements
+* Made -f (file output) switch mandatory on receiver
 
-Added:
-  -r switch to read debug files on receiver
-  -v switch to enable verbosity (debug code)
-  Initial multiple protocol support (not tested much)
-  Interface support for listener (now mandatory)
+Added
+-----
+* -r switch to read debug files on receiver
+* -v switch to enable verbosity (debug code)
+* Initial multiple protocol support (not tested much)
+* Interface support for listener (now mandatory)
 
 Removed
-  -u unicode option (not implemented or necessary)
-  Some debug code
+-------
+* -u unicode option (not implemented or necessary)
+* Some debug code
 
 
+===========
 Version 0.1 (Never posted publicly)
 ===========
-Added Base64 encoding to handle binary input
-Added a lot of debug code, including debug file output for sender and receiver
+Added
+-----
+* Base64 encoding to handle binary input
+* A lot of debug code, including debug file output for sender and receiver
 
 
+===========
 Version 0.0
 ===========
 Initial upload
