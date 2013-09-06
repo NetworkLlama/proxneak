@@ -34,7 +34,9 @@ Requirements
 
 Install
 =======
-Download the latest version from https://github.com/NetworkLlama/proxneak.git
+Download the latest version from the GitHub repo:
+
+git clone https://github.com/NetworkLlama/proxneak.git
 
 
 Command Line
