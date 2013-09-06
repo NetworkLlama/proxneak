@@ -103,6 +103,9 @@ if args.s:
     filt = filt + ' && ' + args.s
 if args.d:
     filt = filt + ' && ' + args.d
+if proto == '\\tcp':
+    filt = filt + ' && tcp[13] = 0x02'
+print filt
 
 
 def listener():
