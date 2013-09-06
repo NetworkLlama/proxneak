@@ -1,4 +1,3 @@
-===========
 Version 0.3
 ===========
 Changed
@@ -16,7 +15,6 @@ Added
 * Initial TCP functionality
 
 
-===========
 Version 0.2
 ===========
 Changed
@@ -37,7 +35,6 @@ Removed
 * Some debug code
 
 
-===========
 Version 0.1 (Never posted publicly)
 ===========
 Added
@@ -46,7 +43,6 @@ Added
 * A lot of debug code, including debug file output for sender and receiver
 
 
-===========
 Version 0.0
 ===========
 Initial upload
