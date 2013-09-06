@@ -16,25 +16,26 @@
 # Place, Suite 330, Boston, MA  02111-1307  USA
 #
 
-# TODO: Add gzip functionality to reduce time to send overall file
-
 import argparse
 import base64
+import bz2
 import pickle
 import pcapy
 import socket
 from struct import *
+import sys
 import time
 
 parser = argparse.ArgumentParser(description='Receive data from any ' +
-    'connection that allows traffic to pass through, even if it\'s a ' +
-    'regenerative proxy. Be aware that random latency can cause problems ' +
-    'at the receiving end.  Requires root privileges.  Server portion ' +
-    'requires pcapy.')
+    'connection that allows traffic to pass through, even if there\'s a ' +
+    'regenerative proxy in the stream. Be aware that random latency can ' +
+    'cause problems at the receiving end.  Requires root privileges.')
 parser.add_argument('-i', nargs=1, metavar='<interface>',
-    help='Listener network interface')
-parser.add_argument('-l', nargs=1, metavar='<src>',
-    help='Listen for IP address (not currently implemented)')
+    help='Listener network interface (required)')
+parser.add_argument('-s', nargs=1, metavar='<src>',
+    help='Sending IP address (optional)')
+parser.add_argument('-d', nargs=1, metavar='<dst>',
+    help='Receiving IP address (optional)')
 parser.add_argument('-p', nargs=1, metavar='<port>',
     help='Listener port (default is 53)')
 parser.add_argument('--proto', nargs=1, metavar='<protocol>',
@@ -44,13 +45,21 @@ parser.add_argument('-f', nargs=1, metavar='filename',
 parser.add_argument('-r', nargs=1, metavar='filename', help='Read a list ' +
     'file in (requires --proto be specified)')
 parser.add_argument('-v', action='store_true', help='Verbose mode')
-parser.add_argument('-V', action='version', version='0.2',
+parser.add_argument('-V', action='version', version='0.3',
     help='Display version number')
+parser.add_argument('-z', action='store_true',
+    help='Incoming content is compressed with bzip2')
 
 args = parser.parse_args()
 
 # Set some default parameters if they're not already set by argument.
 # Defaults are port 80, 1 packet/sec, use UDP
+if not args.i:
+    print 'Requires an interface be specified with -i.  Exiting.'
+    sys.exit()
+else:
+    i_face = args.i[0]
+
 if not args.p:
     dstport = 53
 else:
@@ -58,19 +67,9 @@ else:
 
 if not args.f:
     print 'Requires an output file be specified with -f.  Exiting.'
-    exit
+    sys.exit()
 else:
     f_out = args.f[0]
-
-# TODO: Add interface and destination address to filter in listener()
-if not args.i:
-    print 'Requires an interface be specified with -i.  Exiting.'
-    exit
-else:
-    i_face = args.i[0]
-
-if args.l:
-    dest = args.l[0]
 
 if not args.proto:
     proto = '\\udp'
@@ -87,7 +86,7 @@ else:
 if args.r:
     if not args.f:
         print 'Requires a protocol be specified with --proto. Exiting.'
-        exit
+        sys.exit()
     else:
         f_in = args.r[0]
 else:
@@ -100,6 +99,11 @@ packets = []
 gap = 0
 message = ''
 filt = 'ip proto ' + proto + ' && port ' + str(dstport)
+if args.s:
+    filt = filt + ' && ' + args.s
+if args.d:
+    filt = filt + ' && ' + args.d
+
 
 def listener():
     # Setup listener using pcapy
@@ -119,6 +123,10 @@ def packetstore(p):
     p_info = parse_packet(p)
     if args.v:
         print p_info[0]
+    # TODO: If TCP, check if sequence number is already present and don't
+    #       append it if it is.  This will protect against proxies that
+    #       continue to try to connect even if the originating system is no
+    #       longer trying to send.
     packets.append(p_info)
     if len(packets) == 8:
         synchronize()
@@ -187,7 +195,7 @@ def parse_packet(packet):
         elif protocol == 1:
             i = iph_len + eth_len
             icmph_len = 4
-            icmp_header = packet[i:i+4]
+            icmp_header = packet[i:i + 4]
 
             icmph = unpack('!BBH', icmp_header)
 
@@ -199,7 +207,7 @@ def parse_packet(packet):
         # If not TCP/UDP/ICMP
         else:
             print 'Protocol not TCP/UDP/ICMP. Exiting.'
-            exit
+            sys.exit()
 
 
 # Use the initial 8 packets to determine average packet spacing.  Failure to
@@ -221,7 +229,7 @@ def check_finish():
     q = len(packets) - 1
     gap_check = (packets[q][0] - packets[q - 15][0]) / 15
     # Allow a small fudge factor in the check for random latency
-    if gap_check <= gap * 1.03:
+    if gap_check <= gap * 1.10:
         print "Decoding..."
         p_decode(packets)
         reset()
@@ -266,10 +274,15 @@ def p_decode(m):
     # Create a file called something like proxneak-1372837358 if no filename
     # has been provided.
     # At the moment, I don't have a way to guess the proper extension
+    # TODO: Add some sanity checking to make sure the Base64 message ends in a
+    #       valid format.
     if not f_out:
         f_out = 'proxneak-' + str(int(time.mktime(time.gmtime())))
     tempFile = open(f_out, 'wb')
-    tempFile.write(base64.b64decode(message))
+    if args.z:
+        tempFile.write(bz2.decompress(base64.b64decode(message)))
+    else:
+        tempFile.write(base64.b64decode(message))
     tempFile.close()
     print "Message written out to " + f_out
 
@@ -285,7 +298,7 @@ def p_decode(m):
         pickle.dump(m, tDebugFile)
         tDebugFile.close
 
-    exit()
+    sys.exit()
 
 
 def main():
