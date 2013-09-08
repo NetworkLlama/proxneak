@@ -21,6 +21,17 @@ resulting in a TCP connection from an OS different from the originating system
 (for example, FreeBSD instead of Windows).  But it still sends a packet, and
 that a packet is sent can still be a form of information.
 
+The code uses timing between received packets to signify bits: a packet 
+arriving means a 1, no packet means a 0.  There's an opening set of eight 
+packets to set the timing and a closing sequence that equates to 0x00FFFF 
+to initiate decoding.
+
+Data is sent Base64-encoded and, optionally, compressed.  It's slow: at a 
+default rate of one packet per second with no compression, it takes an entire 
+day to send about 8KB.  But that's more than enough to sneak out some 
+credentials, and if you have a reasonably good connection and a couple of days, 
+it's possible to sneak out a Word doc or PDF.
+
 (Note that this might also be a way of sending information, albeit slowly,
 that the NSA, et al., can't reasonably track.  Saving all of the SYN packets
 that cross the Internet just isn't a practical way of doing business.)
