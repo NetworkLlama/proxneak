@@ -43,15 +43,12 @@ Usage
 =====
 Set up the server:
 
-==
-sudo python proxneak-server.py -i eth0 --proto t -p 80 -f test.txt
-==
+```sudo python proxneak-server.py -i eth0 --proto t -p 80 -f test.txt```
+
 
 And then send the data with the client:
 
-==
-python proxneak.py -d 198.51.100.27 --proto t -p 80 -f test.txt -r 10
-==
+```python proxneak.py -d 198.51.100.27 --proto t -p 80 -f test.txt -r 10```
 
 
 Command Line
